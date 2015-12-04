@@ -1,4 +1,6 @@
+$LOAD_PATH<<'.'
 require 'gosu'
+require 'puzzle_objects'
 
 class Player 	
   attr_accessor :x, :y, :max_x
@@ -50,19 +52,8 @@ class Player
   
 end
 
+include Objects
 
-class Wall
-  attr_accessor :x, :y
-  def initialize img, x, y
-    @img = img
-    @x = 500
-    @y = 440
-  end
-  
-  def draw
-    @img.draw(@x,@y,1)
-  end
-end
 
 class Input < Gosu::TextInput  
   attr_reader :x, :y
@@ -136,6 +127,7 @@ end
     # Default case: user must have clicked the right edge
     self.caret_pos = self.selection_start = self.text.length
   end
+    
         
   end
 
@@ -143,7 +135,10 @@ class Game < Gosu::Window
 	def initialize width=1000, height = 600, fullscreen=false
 		super
     @sprite = Player.new self
+    #puzzle items
     @wall = Wall.new Gosu::Image.new("media/tile.png"), 300, 460
+    @river = River.new Gosu::Image.new("media/river.png"), 400, 460
+    #background
     @backdrop = Gosu::Image.new(self, "media/background1.png", false)
     @foreground = Gosu::Image.new(self, "media/foreground.png", false)
     @sprite.max_x = @foreground.width
@@ -152,15 +147,21 @@ class Game < Gosu::Window
     
     @text_input = Input.new(self, font, 50, 30)
     @cursor = Gosu::Image.new(self, "media/tile.png", false)
+    
+    puzzle_count = 0
 	end
   
   def update
-    @sprite.update
-    
-          
-    if @sprite.x > @wall.x - 100
-      @sprite.x= @wall.x - 100
-      end
+    @sprite.update  
+    #puzzle solvers
+    if @sprite.x > @wall.x - 100 && @wall.passable == false
+       @sprite.x = @wall.x - 100
+    elsif @wall.passable == true
+      @wall.y -= 5
+    end
+    if @sprite.x > @river.x - 100 && @river.passable == false
+      @sprite.x = @river.x - 100
+    end
   end
 	
   def draw
@@ -169,8 +170,9 @@ class Game < Gosu::Window
     end
     translate *cam_coords do
       @foreground.draw 0,430,-1
-    @sprite.draw
+      @sprite.draw
       @wall.draw
+      @river.draw
     end
     
     @text_input.draw
@@ -181,13 +183,31 @@ class Game < Gosu::Window
   def button_down id
     if id == Gosu::KbEscape
       close
-      elsif id == Gosu::MsLeft
+    elsif id == Gosu::MsLeft
       self.text_input = @text_input
       self.text_input.move_caret(mouse_x) unless self.text_input.nil?
-    elsif id == Gosu::KbEnter
-      self.text_input.x = -500
+      puzzle_solved(self.text_input.text)
+      self.text_input.text = ""
+      #close off textbox
+      elsif id == Gosu::MsRight
+      if self.text_input
+        self.text_input = nil
+      end
+    
     end
   end
+  
+  def puzzle_solved block
+    if block == "key"
+      @wall.passable = true
+     # puzzle_count += 1
+    elsif block == "boat" && @wall.passable
+      @river.passable = true
+      @sprite.x += @river.x + 400
+    end
+  end
+  
+  
   #paralax
   def plx_ratio
     @plx_ratio ||= (@backdrop.width - self.width) / (@foreground.width - self.width).to_f
@@ -200,10 +220,18 @@ class Game < Gosu::Window
   def cam_coords
     cam_x = [[@sprite.x - self.width/2, 0].max, [@sprite.x + self.width/2, @foreground.width - self.width].min].min
     [0 - cam_x, 0 - @y]
-  end
-  
+  end  
 end
 
-
+    
+    class Puzzles
+      def initialize window
+        @window = window
+        @text = text
+        @obj = obj
+      end
+      def update
+      end
+    end
 
 Game.new.show
