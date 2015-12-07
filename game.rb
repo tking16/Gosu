@@ -3,12 +3,14 @@ require 'gosu'
 require 'puzzle_objects'
 
 class Player 	
-  attr_accessor :x, :y, :max_x
+  attr_accessor :x, :y, :max_x, :is_key
 	def initialize window
 		@window = window
     #Image
     @width = @height = 150
     @idle = Gosu::Image.load_tiles @window, "media/rubychar.png", @width, @height, true
+    @boat_spr = Gosu::Image.new @window, "media/spr_boat.png", @width, @height, false
+    @key_spr = Gosu::Image.new @window, "media/key_spr.png", @width, @height, false
     #starting location
     @x = 30
     @y = 430
@@ -18,6 +20,8 @@ class Player
     #movement
     @direction = :right
     @frame = 0 #the number of the image from sprite sheet
+    @is_boat = false
+    @is_key = false
 	end
 	
   def update
@@ -42,11 +46,22 @@ class Player
   def draw
     f = @frame % @idle.size
     image = @idle[f] #calculation above is now in an array
+    if @is_boat == true
+      image = @boat_spr
+    elsif @is_key == true
+      image = @key_spr
+    else
+      image = @idle[f] #calculation above is now in an array
+    end
     if @direction == :right
     image.draw @x, @y, 1,1,1
     else
       image.draw @x + image.width, @y, 1, -1
-
+    end
+    if @x > @window.river.x - 100  && @window.river.passable == true && @x < @max_x - @window.river.x - 100
+      @is_boat = true
+    else
+      @is_boat = false
     end
   end
   
@@ -127,27 +142,30 @@ end
     # Default case: user must have clicked the right edge
     self.caret_pos = self.selection_start = self.text.length
   end
-    
-        
   end
 
 class Game < Gosu::Window
+  attr_accessor :river
 	def initialize width=1000, height = 600, fullscreen=false
 		super
     @sprite = Player.new self
     #puzzle items
-    @wall = Wall.new Gosu::Image.new("media/tile.png"), 300, 460
-    @river = River.new Gosu::Image.new("media/river.png"), 400, 460
+    @wall = Wall.new Gosu::Image.new("media/door_spr.png"), 300, 460
+    @river = River.new Gosu::Image.new("media/spr_river.png"), 400, 460
+    @post = Advance.new Gosu::Image.new("media/nxtlvl.png"), 400, 460
     #background
     @backdrop = Gosu::Image.new(self, "media/background1.png", false)
     @foreground = Gosu::Image.new(self, "media/foreground.png", false)
     @sprite.max_x = @foreground.width
     @x = @y = 0
+    @level = 1
     font = Gosu::Font.new(self, Gosu::default_font_name, 20)
     
     @text_input = Input.new(self, font, 50, 30)
     @cursor = Gosu::Image.new(self, "media/tile.png", false)
-    
+    @music = Gosu::Song.new "media/gameMusic.wav"
+    @music.volume = 0.4
+    @music.play
     puzzle_count = 0
 	end
   
@@ -155,24 +173,45 @@ class Game < Gosu::Window
     @sprite.update  
     #puzzle solvers
     if @sprite.x > @wall.x - 100 && @wall.passable == false
+      @help = Gosu::Image.from_text self, "A massive door is in the way \n create a key class to \n unlock the door", Gosu.default_font_name, 40
        @sprite.x = @wall.x - 100
-    elsif @wall.passable == true
+    elsif @sprite.x > @wall.x - 100 && @wall.passable == true
       @wall.y -= 5
+      @sprite.is_key = false
     end
     if @sprite.x > @river.x - 100 && @river.passable == false
       @sprite.x = @river.x - 100
+      @help = Gosu::Image.from_text self, "It's a river. You're gonna need a boat \n to get across. Your boat needs to have \n a float method", Gosu.default_font_name, 40
     end
+    
+    
+    if @sprite.x > @post.x - 100 
+      @level = 2
+      @sprite.x = 30
+      @backdrop = nil
+      @backdrop = Gosu::Image.load_tiles(self, "media/bg2.png", true)
+      @river.y += 1000
+    end
+    #help boards
+    
   end
 	
   def draw
     translate *plx_coords do
-    @backdrop.draw 0,0,-2,0.9,0.4
+    @backdrop.draw 0,0,-2,1,0.4
+      if @level == 2
+        @backdrop.draw 0,0,-2,1,1
+      end
     end
     translate *cam_coords do
-      @foreground.draw 0,430,-1
+      @foreground.draw 0,430,2
       @sprite.draw
       @wall.draw
       @river.draw
+      @post.draw
+      unless @help.nil?
+      @help.draw 350, 100, 2,1,1,0xcc666666
+      end
     end
     
     @text_input.draw
@@ -186,6 +225,7 @@ class Game < Gosu::Window
     elsif id == Gosu::MsLeft
       self.text_input = @text_input
       self.text_input.move_caret(mouse_x) unless self.text_input.nil?
+      error_help(self.text_input.text)
       puzzle_solved(self.text_input.text)
       self.text_input.text = ""
       #close off textbox
@@ -198,12 +238,28 @@ class Game < Gosu::Window
   end
   
   def puzzle_solved block
-    if block == "key"
+    if block == "class Key end"
       @wall.passable = true
-     # puzzle_count += 1
-    elsif block == "boat" && @wall.passable
+      @sprite.is_key = true
+      @help = nil
+    elsif block == "class Boat def float end end" && @wall.passable
       @river.passable = true
-      @sprite.x += @river.x + 400
+      @sprite.x += 5 until @sprite.x == @river.x
+    end
+  end
+  
+  def error_help block
+    if block == "class key end"
+      @help = nil
+      @help = Gosu::Image.from_text self, "Syntax error: Don't forget \n class names begin with \n capital letters", Gosu.default_font_name, 40
+    end
+    if block == "class Key" || block == "class key"
+      @help = nil
+      @help = Gosu::Image.from_text self, "error: Don't forget the 'end' keyword", Gosu.default_font_name, 40
+    end
+    if block == "class Boat end"
+      @help = nil
+      @help = Gosu::Image.from_text self, "Don't forget your 'float' method!", Gosu.default_font_name, 40
     end
   end
   
