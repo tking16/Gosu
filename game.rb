@@ -58,7 +58,7 @@ class Player
     else
       image.draw @x + image.width, @y, 1, -1
     end
-    if @x > @window.river.x - 100  && @window.river.passable == true && @x < @max_x - @window.river.x - 100
+    if @x > @window.river.x - 100  && @window.river.passable == true && @x < @max_x - @window.river.x + 100
       @is_boat = true
     else
       @is_boat = false
@@ -162,7 +162,7 @@ class Game < Gosu::Window
     font = Gosu::Font.new(self, Gosu::default_font_name, 20)
     
     @text_input = Input.new(self, font, 50, 30)
-    @cursor = Gosu::Image.new(self, "media/tile.png", false)
+    @cursor = Gosu::Image.new(self, "media/arrow.png", false)
     @music = Gosu::Song.new "media/gameMusic.wav"
     @music.volume = 0.4
     @music.play
@@ -189,8 +189,9 @@ class Game < Gosu::Window
       @level = 2
       @sprite.x = 30
       @backdrop = nil
-      @backdrop = Gosu::Image.load_tiles(self, "media/bg2.png", true)
+      @backdrop = Gosu::Image.new(self, "media/bg2.png", true)
       @river.y += 1000
+      @river.x += 1000
     end
     #help boards
     
@@ -245,6 +246,7 @@ class Game < Gosu::Window
     elsif block == "class Boat def float end end" && @wall.passable
       @river.passable = true
       @sprite.x += 5 until @sprite.x == @river.x
+      @help = nil
     end
   end
   
